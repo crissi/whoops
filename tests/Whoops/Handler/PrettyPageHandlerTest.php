@@ -62,26 +62,30 @@ class PrettyPageHandlerTest extends TestCase
     }
 
     /**
-     * @covers Whoops\Handler\PrettyPageHandler::setResourcesPath
-     * @covers Whoops\Handler\PrettyPageHandler::getResourcesPath
+     * @covers Whoops\Handler\PrettyPageHandler::addResourcePath
+     * @covers Whoops\Handler\PrettyPageHandler::getResourcePaths
      */
-    public function testGetSetResourcesPath()
+    public function testAddGetResourcePaths()
     {
         $path = __DIR__; // guaranteed to be valid!
         $handler = $this->getHandler();
 
-        $handler->setResourcesPath($path);
-        $this->assertEquals($path, $handler->getResourcesPath());
+        $handler->addResourcePath($path);
+        $addedPaths = $handler->getResourcePaths();
+
+
+        $this->assertCount(2, $addedPaths);
+        $this->assertEquals($path, $addedPaths[1]);
     }
 
     /**
      * @covers Whoops\Handler\PrettyPageHandler::setResourcesPath
      * @expectedException InvalidArgumentException
      */
-    public function testSetInvalidResourcesPath()
+    public function testAddInvalidResourcePath()
     {
         $path = __DIR__ . '/ZIMBABWE'; // guaranteed to be invalid!
-        $this->getHandler()->setResourcesPath($path);
+        $this->getHandler()->addResourcePath($path);
     }
 
     /**

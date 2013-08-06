@@ -6,14 +6,27 @@
 
 namespace Whoops\Handler;
 use Whoops\Handler\Handler;
+use RuntimeException;
 use InvalidArgumentException;
 
 class PrettyPageHandler extends Handler
 {
     /**
-     * @var string
+     * A list of paths to search for named
+     * resources in.
+     * 
+     * @var array
      */
-    private $resourcesPath;
+    private $resourcePaths = array();
+
+    /**
+     * Holds cached hits as a result of a scan
+     * for a specific resource. The key is the
+     * resource identifier.
+     *
+     * @var array
+     */
+    private $resourceMap = array();
 
     /**
      * @var array[]
@@ -53,12 +66,16 @@ class PrettyPageHandler extends Handler
      */
     public function __construct()
     {
-        if (extension_loaded('xdebug')) {
-            // Register editor using xdebug's file_link_format option.
+        // Register editor using xdebug's file_link_format option, if
+        // xdebug is available:
+        if(extension_loaded('xdebug')) {
             $this->editors['xdebug'] = function($file, $line) {
                 return str_replace(array('%f', '%l'), array($file, $line), ini_get('xdebug.file_link_format'));
             };
         }
+
+        // Register the default, local path for resources:
+        $this->addResourcePath(__DIR__ . "/../Resources");
     }
 
     /**
@@ -72,17 +89,10 @@ class PrettyPageHandler extends Handler
             return Handler::DONE;
         }
 
-        // Get the 'pretty-template.php' template file
-        // @todo: this can be made more dynamic &&|| cleaned-up
-        if(!($resources = $this->getResourcesPath())) {
-            $resources = __DIR__ . '/../Resources';
-        }
+        $templateFile = $this->getResource("pretty-template.php");
 
-        $templateFile = "$resources/pretty-template.php";
-
-        // @todo: Make this more reliable,
-        // possibly by adding methods to append CSS & JS to the page
-        $cssFile = "$resources/pretty-page.css";
+        // @todo: Add stylesheet getter/setter methods:
+        $cssFile      = $this->getResource("pretty-page.css");
 
         // Prepare the $v global variable that will pass relevant
         // information to the template
@@ -309,25 +319,85 @@ class PrettyPageHandler extends Handler
     }
 
     /**
+     * Given a resource name (a relative path), search for it
+     * in any of the registered search paths, and return its
+     * real, absolute path.
+     *
+     * @throws RuntimeException If no resource match found
+     * @param  string $resourceId
      * @return string
      */
-    public function getResourcesPath()
+    protected function getResource($resourceId)
     {
-        return $this->resourcesPath;
+        $paths      = $this->getResourcePaths();
+        $resourceId = ltrim($resourceId, "/");
+
+        // Check if we matched this resource before, and already
+        // have its full path in memory:
+        if(isset($this->resourceMap[$resourceId])) {
+            return $this->resourceMap[$resourceId];
+        }
+
+        // Search for the resource in the available paths,
+        // in the reverse order in which they were added:
+        for($i = count($paths) - 1; $i >= 0; $i--) {
+            $path = "{$paths[$i]}/$resourceId";
+
+            if(is_file($path)) {
+                // Cache the full path to this resource:
+                $this->resourceMap[$resourceId] = $path;
+                return $path;
+            }
+        }
+
+        // If we got this far, no matches were found!
+        throw new RuntimeException(
+            "Resource '$resourceId' not found in search paths: " . join($paths, ", ")
+        );
     }
 
     /**
      * @throws InvalidArgumentException If argument is not a valid directory
+     * @param  string $path
+     */
+    public function addResourcePath($path)
+    {
+        $path = realpath($path);
+
+        if(!is_dir($path)) {
+            throw new InvalidArgumentException(
+                __METHOD__ . " expects a valid directory."
+            );
+        }
+
+        $this->resourcePaths[] = $path;
+    }
+
+    /**
+     * @return array
+     */
+    public function getResourcePaths()
+    {
+        return $this->resourcePaths;
+    }
+
+    /**
+     * @deprecated Use PrettyPageHandler::getResourcePaths
+     * 
+     * @return string
+     */
+    public function getResourcesPath()
+    {
+        return reset($this->resourcePaths);
+    }
+
+    /**
+     * @deprecated Use PrettyPageHandler::addResourcePath
+     * 
      * @param string $resourcesPath
      */
     public function setResourcesPath($resourcesPath)
     {
-        if(!is_dir($resourcesPath)) {
-            throw new InvalidArgumentException(
-                "$resourcesPath is not a valid directory"
-            );
-        }
-
-        $this->resourcesPath = $resourcesPath;
+        $this->addResourcePath($resourcesPath);
     }
 }
